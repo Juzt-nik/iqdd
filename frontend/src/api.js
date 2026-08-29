@@ -29,6 +29,13 @@ export async function analyzeImage(file) {
   return handleResponse(res)
 }
 
+export async function analyzeBatch(files) {
+  const form = new FormData()
+  for (const file of files) form.append('files', file)
+  const res = await fetch(`${BASE}/api/v1/analyze/batch`, { method: 'POST', body: form })
+  return handleResponse(res)
+}
+
 export async function listAnalyses({ limit = 20, offset = 0, qualityLabel = null } = {}) {
   const params = new URLSearchParams({ limit, offset })
   if (qualityLabel) params.set('quality_label', qualityLabel)

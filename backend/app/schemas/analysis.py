@@ -44,6 +44,20 @@ class AnalysisListOut(BaseModel):
     results: list[AnalysisSummaryOut]
 
 
+class BatchItemOut(BaseModel):
+    filename: str
+    status: str  # "ok" | "error"
+    analysis: AnalysisOut | None = None
+    error: str | None = None
+
+
+class BatchAnalysisOut(BaseModel):
+    total: int
+    succeeded: int
+    failed: int
+    results: list[BatchItemOut]
+
+
 class ErrorOut(BaseModel):
     detail: str
 

@@ -13,7 +13,10 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.database import get_db
 from app.db.models import Analysis
-from app.schemas.analysis import AnalysisListOut, AnalysisOut, AnalysisSummaryOut, HealthOut
+from app.schemas.analysis import (
+    AnalysisListOut, AnalysisOut, AnalysisSummaryOut, HealthOut,
+    BatchAnalysisOut, BatchItemOut,
+)
 
 router = APIRouter()
 
@@ -39,12 +42,14 @@ def health(request: Request, db: Session = Depends(get_db)):
                       database="ok" if db_ok else "unreachable")
 
 
-@router.post("/api/v1/analyze", response_model=AnalysisOut, status_code=status.HTTP_201_CREATED, tags=["analysis"])
-async def analyze_image(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
-    svc = getattr(request.app.state, "inference_service", None)
-    if svc is None:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Inference models are not loaded")
-
+async def _analyze_one(file: UploadFile, svc, db: Session) -> Analysis:
+    """Shared logic for analyzing and persisting one uploaded image —
+    used by both /analyze and /analyze/batch so the two endpoints can
+    never drift out of sync on validation, storage, or DB behavior.
+    Raises HTTPException on any failure; caller decides how to handle
+    that (fail the whole request for /analyze, or record a per-item
+    error for /analyze/batch).
+    """
     if file.content_type not in settings.ALLOWED_CONTENT_TYPES:
         raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
                              f"Unsupported content type '{file.content_type}'. "
@@ -71,7 +76,7 @@ async def analyze_image(request: Request, file: UploadFile = File(...), db: Sess
 
     try:
         result = svc.analyze(img)
-    except Exception as exc:  # noqa: BLE001 — surface as a clean 500, don't leak a stack trace to the client
+    except Exception as exc:  # noqa: BLE001 — surface as a clean error, don't leak a stack trace
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR,
                              f"Analysis failed: {exc}") from exc
 
@@ -96,8 +101,52 @@ async def analyze_image(request: Request, file: UploadFile = File(...), db: Sess
     db.add(record)
     db.commit()
     db.refresh(record)
+    return record
 
+
+@router.post("/api/v1/analyze", response_model=AnalysisOut, status_code=status.HTTP_201_CREATED, tags=["analysis"])
+async def analyze_image(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    svc = getattr(request.app.state, "inference_service", None)
+    if svc is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Inference models are not loaded")
+
+    record = await _analyze_one(file, svc, db)
     return record.to_dict()
+
+
+@router.post("/api/v1/analyze/batch", response_model=BatchAnalysisOut, status_code=status.HTTP_201_CREATED, tags=["analysis"])
+async def analyze_batch(request: Request, files: list[UploadFile] = File(...), db: Session = Depends(get_db)):
+    """Analyzes multiple images in one request. Each file is validated and
+    processed independently — one corrupt/oversized/unreadable file in the
+    batch does not fail the others; its failure is reported per-item
+    instead, same status-code semantics as the single endpoint, just
+    attached to that item rather than raised for the whole request.
+    """
+    svc = getattr(request.app.state, "inference_service", None)
+    if svc is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Inference models are not loaded")
+
+    if len(files) == 0:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No files provided")
+    if len(files) > settings.MAX_BATCH_SIZE:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                             f"Batch exceeds the {settings.MAX_BATCH_SIZE}-file limit "
+                             f"({len(files)} files submitted)")
+
+    items: list[BatchItemOut] = []
+    succeeded = 0
+    for file in files:
+        try:
+            record = await _analyze_one(file, svc, db)
+            items.append(BatchItemOut(filename=file.filename or "upload", status="ok",
+                                       analysis=AnalysisOut(**record.to_dict())))
+            succeeded += 1
+        except HTTPException as exc:
+            items.append(BatchItemOut(filename=file.filename or "upload", status="error",
+                                       error=str(exc.detail)))
+
+    return BatchAnalysisOut(total=len(files), succeeded=succeeded,
+                             failed=len(files) - succeeded, results=items)
 
 
 @router.get("/api/v1/analyses", response_model=AnalysisListOut, tags=["analysis"])

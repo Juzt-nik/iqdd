@@ -24,6 +24,12 @@ class Settings:
     MAX_UPLOAD_MB: int = int(os.getenv("MAX_UPLOAD_MB", "15"))
     ALLOWED_CONTENT_TYPES: set[str] = {"image/jpeg", "image/png", "image/bmp", "image/webp"}
 
+    # Cap on how many files a single /analyze/batch request can contain —
+    # each image runs the full CNN + autoencoder pipeline sequentially, so
+    # an unbounded batch size is a real resource-exhaustion risk on a
+    # single-worker deployment (see Deployment notes in the README).
+    MAX_BATCH_SIZE: int = int(os.getenv("MAX_BATCH_SIZE", "10"))
+
     # If no trained models are found at startup, fail fast with a clear
     # error rather than serving broken analyses silently.
     REQUIRE_MODELS: bool = os.getenv("REQUIRE_MODELS", "true").lower() == "true"
