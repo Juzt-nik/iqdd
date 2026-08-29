@@ -27,7 +27,7 @@ An image-based full-stack application that takes an image and analyzes its visua
 
 ## Architecture
 
-![System Architecture](architecture.png)
+![System Architecture](public/architecture.png)
 
 - **Frontend**: React (Vite), connects to the backend via `/api/v1/*`. For Docker (or same-origin deployments), these calls will be reverse proxied by nginx, and the browser will only see one origin. The above cloud deployment has separate origins (Vercel + Render), and the frontend origin is allowed by the backend's `CORS_ORIGINS`, while the backend origin is set to the frontend's URL using `VITE_API_BASE`.
 - **Backend**: FastAPI. Loads all trained models once at startup, exposes
