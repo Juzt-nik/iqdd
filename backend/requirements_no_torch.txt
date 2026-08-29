@@ -1,0 +1,18 @@
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-multipart==0.0.12
+sqlalchemy==2.0.35
+pydantic==2.9.2
+opencv-python-headless==4.10.0.84
+numpy==1.26.4
+# torch/torchvision: for local (non-Docker) setup, `pip install -r
+# requirements.txt` pulls these from PyPI, which on Linux bundles CUDA and
+# is fine if you have a GPU (e.g. your RTX 5070) and want to run training
+# scripts locally. The Docker image instead installs a CPU-only build
+# first and filters these two lines back out of this file before its
+# second install pass (see backend/Dockerfile) since the deployed
+# container has no GPU by default.
+scikit-learn==1.5.2
+joblib==1.4.2
+pandas==2.2.3
+tqdm==4.66.5

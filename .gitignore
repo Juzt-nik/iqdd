@@ -1,0 +1,36 @@
+# --- Python / backend ---
+backend/venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+
+# --- Node / frontend ---
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# --- Env / secrets ---
+.env
+!.env.example
+
+# --- Large / generated data (NOT source code — regenerate via scripts/) ---
+backend/data/clean/
+backend/data/synthetic/
+
+# Trained model artifacts are kept intentionally (small, makes the repo
+# runnable without retraining) — do NOT ignore backend/data/models/
+
+# --- Runtime state ---
+backend/storage/
+*.db
+*.sqlite3
+
+# --- OS / editor junk ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log

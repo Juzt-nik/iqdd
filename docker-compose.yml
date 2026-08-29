@@ -1,0 +1,42 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: iqdd-backend
+    environment:
+      DATABASE_URL: sqlite:////app/storage/iqdd.db
+      STORAGE_DIR: /app/storage/images
+      MODEL_DIR: /app/data/models
+      CORS_ORIGINS: "http://localhost:8080,http://localhost:5173"
+      MAX_UPLOAD_MB: "15"
+      REQUIRE_MODELS: "true"
+    volumes:
+      # Persist the SQLite DB and uploaded images across container restarts.
+      - backend_storage:/app/storage
+      # Bind-mount trained models read-only, so you can retrain and update
+      # them without rebuilding the image (drop new artifacts under
+      # backend/data/models/{tree,cnn}/ and `docker compose restart backend`).
+      - ./backend/data/models:/app/data/models:ro
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: iqdd-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+volumes:
+  backend_storage:

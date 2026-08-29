@@ -1,0 +1,26 @@
+{
+  "img_size": 224,
+  "feature_names": [
+    "laplacian_variance",
+    "tenengrad",
+    "mean_luminance",
+    "underexposed_frac",
+    "overexposed_frac",
+    "noise_sigma",
+    "luminance_std",
+    "dynamic_range",
+    "colorfulness",
+    "saturation_mean",
+    "blockiness",
+    "entropy"
+  ],
+  "issue_types": [
+    "blur",
+    "underexposure",
+    "overexposure",
+    "noise",
+    "corruption",
+    "defect"
+  ],
+  "pretrained": true
+}

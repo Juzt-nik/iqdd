@@ -1,0 +1,9 @@
+data/clean/
+data/synthetic/
+storage/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.db
+.venv/
+venv/
