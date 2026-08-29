@@ -1,5 +1,3 @@
-import { useState } from 'react'
-
 const FEATURE_LABELS = {
   laplacian_variance: 'Sharpness (Laplacian var.)',
   tenengrad: 'Sharpness (gradient energy)',
@@ -23,35 +21,49 @@ function formatFeatureValue(key, value) {
 }
 
 export default function AnalysisResult({ result, imagePreviewUrl }) {
-  const [showHeatmap, setShowHeatmap] = useState(false)
   const { quality_score, quality_label, issues, features, heatmap_png_base64, model_versions } = result
 
   return (
     <div className="result-grid">
       <div className="result-image-col">
-        <div className="reg-frame image-frame active">
-          <span className="corner-bl" />
-          <span className="corner-br" />
-          <img
-            src={showHeatmap && heatmap_png_base64 ? `data:image/png;base64,${heatmap_png_base64}` : imagePreviewUrl}
-            alt={showHeatmap ? 'Defect heatmap overlay' : 'Uploaded image'}
-            className="result-image"
-          />
+        <div className="image-pair">
+          <div className="image-pair-item">
+            <div className="reg-frame image-frame active">
+              <span className="corner-bl" />
+              <span className="corner-br" />
+              <img src={imagePreviewUrl} alt="Uploaded image" className="result-image" />
+            </div>
+            <div className="image-pair-label mono">Original</div>
+          </div>
+
+          {heatmap_png_base64 && (
+            <div className="image-pair-item">
+              <div className="reg-frame image-frame active">
+                <span className="corner-bl" />
+                <span className="corner-br" />
+                <img
+                  src={`data:image/png;base64,${heatmap_png_base64}`}
+                  alt="Defect heatmap overlay"
+                  className="result-image"
+                />
+              </div>
+              <div className="image-pair-label mono">Defect view</div>
+            </div>
+          )}
         </div>
+
         {heatmap_png_base64 && (
-          <div className="view-toggle">
-            <button
-              className={!showHeatmap ? 'toggle-btn active' : 'toggle-btn'}
-              onClick={() => setShowHeatmap(false)}
-            >
-              Original
-            </button>
-            <button
-              className={showHeatmap ? 'toggle-btn active' : 'toggle-btn'}
-              onClick={() => setShowHeatmap(true)}
-            >
-              Defect view
-            </button>
+          <div className="heatmap-legend">
+            <div className="heatmap-legend-bar" />
+            <div className="heatmap-legend-labels mono">
+              <span>Low anomaly</span>
+              <span>High anomaly</span>
+            </div>
+            <p className="heatmap-legend-caption">
+              Grad-CAM (CNN) blended with the autoencoder's reconstruction-error
+              map, overlaid on the original image — brighter/warmer regions are
+              where the model's attention or reconstruction error is highest.
+            </p>
           </div>
         )}
       </div>
