@@ -1,29 +1,37 @@
 :root {
-  /* --- Color tokens --- */
-  --bg: #14181c;
-  --bg-panel: #1c2126;
-  --bg-panel-raised: #232a30;
-  --grid-line: #2a3138;
-  --grid-line-strong: #3a434b;
+  /* --- Color tokens: Arounda-style palette (warm near-black + burnt orange) --- */
+  --bg: #161316;
+  --bg-panel: #1e1a1b;
+  --bg-panel-raised: #2a2224;
+  --grid-line: #2e2628;
+  --grid-line-strong: #453027;
 
-  --text-primary: #e8e6de;
-  --text-secondary: #8b9199;
-  --text-tertiary: #5c636b;
+  --text-primary: #ffffff;
+  --text-secondary: #bababa;
+  --text-tertiary: #7a7570;
 
-  --accent: #e8a33d;
-  --accent-dim: #6b5730;
+  --accent: #ff6d29;
+  --accent-hover: #ff8a52;
+  --accent-dim: #453027;
 
   --status-acceptable: #5fb88f;
   --status-acceptable-bg: rgba(95, 184, 143, 0.12);
-  --status-degraded: #d9a441;
-  --status-degraded-bg: rgba(217, 164, 65, 0.12);
-  --status-defective: #c4574a;
-  --status-defective-bg: rgba(196, 87, 74, 0.14);
+  /* Degraded reuses a warm amber (kept distinct from --accent so a
+     "degraded" badge is never visually confused with an interactive
+     accent/focus element) rather than introducing an unrelated hue. */
+  --status-degraded: #e8a33d;
+  --status-degraded-bg: rgba(232, 163, 61, 0.12);
+  --status-defective: #e2503b;
+  --status-defective-bg: rgba(226, 80, 59, 0.14);
 
-  --font-ui: 'IBM Plex Sans', -apple-system, sans-serif;
-  --font-mono: 'IBM Plex Mono', 'SF Mono', monospace;
+  /* 'Neue Montreal' first for anyone who self-hosts the licensed font
+     (see index.html); Space Grotesk is the free, genuinely available
+     fallback with a close visual match. */
+  --font-ui: 'Neue Montreal', 'Space Grotesk', -apple-system, sans-serif;
+  --font-mono: 'Neue Montreal Mono', 'IBM Plex Mono', 'SF Mono', monospace;
 
-  --radius: 2px;
+  --radius: 10px;
+  --radius-lg: 20px;
 }
 
 * { box-sizing: border-box; }
@@ -32,7 +40,11 @@ html, body, #root { height: 100%; }
 
 body {
   margin: 0;
-  background: var(--bg);
+  background:
+    radial-gradient(ellipse 900px 700px at 18% 8%, rgba(255, 109, 41, 0.16), transparent 60%),
+    radial-gradient(ellipse 700px 600px at 85% 90%, rgba(255, 109, 41, 0.08), transparent 55%),
+    var(--bg);
+  background-attachment: fixed, fixed, fixed;
   color: var(--text-primary);
   font-family: var(--font-ui);
   font-size: 15px;

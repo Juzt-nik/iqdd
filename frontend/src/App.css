@@ -77,10 +77,10 @@
 }
 .btn-primary {
   background: var(--accent);
-  color: #14181c;
+  color: var(--bg);
   border: none;
 }
-.btn-primary:hover { background: #f0b354; }
+.btn-primary:hover { background: var(--accent-hover); }
 .btn-secondary {
   background: transparent;
   color: var(--text-primary);
@@ -95,6 +95,7 @@
   text-align: center;
   cursor: pointer;
   border: 1px dashed var(--grid-line-strong);
+  border-radius: var(--radius-lg);
   background: var(--bg-panel);
   transition: border-color 0.15s ease, background 0.15s ease;
 }
@@ -115,10 +116,11 @@
 .image-frame {
   position: relative;
   overflow: hidden;
+  border-radius: var(--radius-lg);
   background: var(--bg-panel);
   border: 1px solid var(--grid-line);
 }
-.result-image { width: 100%; display: block; max-height: 520px; object-fit: contain; background: #0c0f12; }
+.result-image { width: 100%; display: block; max-height: 520px; object-fit: contain; background: #100e0f; }
 .scanning-image { filter: saturate(0.7) brightness(0.85); }
 .scan-line {
   position: absolute;
@@ -140,7 +142,7 @@
   font-size: 11px;
   letter-spacing: 0.12em;
   color: var(--accent);
-  background: rgba(20, 24, 28, 0.75);
+  background: rgba(22, 19, 22, 0.75);
   padding: 4px 10px;
   border-radius: var(--radius);
 }
@@ -159,6 +161,7 @@
   text-align: center;
   background: var(--bg-panel);
   border: 1px solid var(--grid-line);
+  border-radius: var(--radius-lg);
 }
 .error-panel p { color: var(--text-secondary); margin: 8px 0 20px; }
 .error-text { color: var(--status-defective); font-size: 14px; }
@@ -231,6 +234,9 @@
   margin: 0 auto;
   padding: 32px;
   text-align: center;
+  background: var(--bg-panel);
+  border: 1px solid var(--grid-line);
+  border-radius: var(--radius-lg);
 }
 .batch-loading-thumbs {
   display: flex;
@@ -244,7 +250,7 @@
   height: 64px;
   object-fit: cover;
   border: 1px solid var(--grid-line-strong);
-  border-radius: var(--radius);
+  border-radius: 8px;
   opacity: 0.6;
   animation: pulse 1.4s ease-in-out infinite;
 }
@@ -276,6 +282,7 @@
 .score-panel {
   background: var(--bg-panel);
   border: 1px solid var(--grid-line);
+  border-radius: var(--radius-lg);
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -289,6 +296,7 @@
   background: var(--bg-panel);
   border: 1px solid var(--grid-line);
   border-left: 2px solid var(--grid-line-strong);
+  border-radius: var(--radius);
   padding: 12px 14px;
 }
 .issue-item:has(.severity-high) { border-left-color: var(--status-defective); }
@@ -343,6 +351,7 @@
   text-align: center;
   padding: 60px 20px;
   border: 1px dashed var(--grid-line-strong);
+  border-radius: var(--radius-lg);
 }
 .empty-state p { color: var(--text-secondary); margin: 8px 0 20px; }
 
@@ -357,6 +366,7 @@
   color: var(--text-primary);
   background: var(--bg-panel);
   border: 1px solid var(--grid-line);
+  border-radius: var(--radius);
   padding: 14px;
   transition: border-color 0.15s ease;
 }
