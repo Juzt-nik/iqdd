@@ -5,6 +5,14 @@ quality — detecting blur, under/overexposure, noise, corruption, and
 localized visual defects — using a hybrid classical-CV + deep-learning
 pipeline, with no external AI/vision APIs.
 
+**Live deployment:**
+- Frontend: https://iqdd.vercel.app
+- Backend API: https://iqdd.onrender.com (health: https://iqdd.onrender.com/health)
+
+> Both are on free-tier hosting. The backend sleeps after 15 minutes of
+> inactivity — the first request after idle time can take 30-60 seconds to
+> respond while it wakes up. This is expected free-tier behavior, not a bug.
+
 ## Contents
 
 - [Architecture](#architecture)
@@ -18,7 +26,7 @@ pipeline, with no external AI/vision APIs.
 - [Evaluation & results](#evaluation--results)
 - [Explainability](#explainability)
 - [Limitations & failure cases](#limitations--failure-cases)
-- [Before you submit](#before-you-submit)
+- [Deployment notes](#deployment-notes)
 
 ## Architecture
 
@@ -36,8 +44,11 @@ pipeline, with no external AI/vision APIs.
 ```
 
 - **Frontend**: React (Vite), talks to the backend via `/api/v1/*`. In
-  Docker, nginx reverse-proxies these calls so the browser only ever sees
-  one origin (no CORS in production).
+  Docker (or same-origin deployments), nginx reverse-proxies these calls so
+  the browser only ever sees one origin. In the cloud deployment above,
+  frontend and backend are on separate origins (Vercel + Render), so the
+  frontend is built with `VITE_API_BASE` pointing at the backend URL and
+  the backend's `CORS_ORIGINS` allows the frontend's origin.
 - **Backend**: FastAPI. Loads all trained models once at startup, exposes
   REST endpoints, persists results to a SQL database.
 - **Inference core**: framework-agnostic Python (`app/ml/`) — no FastAPI or
@@ -83,8 +94,11 @@ components, ensembled at inference time:
 ground truth, so one is generated synthetically (`scripts/generate_dataset.py`)
 by applying randomized, parameterized degradations
 (`app/ml/degrade.py`) to clean images, using the known degradation
-parameters as ground truth. Quality score is defined as
-`100 − Σ(issue_weight × severity)` for the applied issues (see
+parameters as ground truth. Source images are 3,600 real photos from
+Kaggle's [`prasunroy/natural-images`](https://www.kaggle.com/datasets/prasunroy/natural-images)
+dataset (8 classes: airplane, car, cat, dog, flower, fruit, motorbike,
+person), each degraded 6 ways — 21,600 total samples. Quality score is
+defined as `100 − Σ(issue_weight × severity)` for the applied issues (see
 `ISSUE_SEVERITY_WEIGHTS` in `degrade.py`) — the same weights are reused at
 inference time in the ensembling step, so the two stay consistent.
 Train/val/test splits are assigned by clean-source-image identity (not
@@ -126,6 +140,8 @@ iqdd/
 │   │       ├── gradcam.py     Grad-CAM
 │   │       └── inference.py   unified ensembled inference service
 │   ├── scripts/
+│   │   ├── select_subset.py   stratified sampler for source photo pool
+│   │   ├── regen_samples.py   regenerates samples/ from a real photo
 │   │   ├── generate_dataset.py
 │   │   ├── train_tree.py
 │   │   └── train_cnn.py
@@ -139,18 +155,12 @@ iqdd/
 │   ├── src/
 │   ├── Dockerfile
 │   └── nginx.conf
-├── samples/                   sample images per quality condition
+├── samples/                   sample images per quality condition (real photo)
 ├── docker-compose.yml
 └── .env.example
 ```
 
 ## Quickstart — Docker (recommended)
-
-Requires trained models to already exist under `backend/data/models/` (see
-[Training your own models](#training-your-own-models) — the repo ships
-with a small validation run already in place so the stack is runnable
-out of the box, but **you should retrain on real data before submitting**;
-see [Before you submit](#before-you-submit)).
 
 ```bash
 docker compose up --build
@@ -192,13 +202,18 @@ Vite's dev server proxies `/api` and `/health` to `http://localhost:8000`
 ## Training your own models
 
 1. **Get clean source images.** Any reasonably diverse photo set works.
-   Suggested: Kaggle's [`prasunroy/natural-images`](https://www.kaggle.com/datasets/prasunroy/natural-images)
-   (~6,900 images, small, diverse — fast to iterate on). Drop them into
-   `backend/data/clean/`.
+   This project used Kaggle's [`prasunroy/natural-images`](https://www.kaggle.com/datasets/prasunroy/natural-images)
+   (~6,900 images across 8 classes). `scripts/select_subset.py` samples
+   evenly across class subfolders so the pool stays visually diverse
+   rather than skewed toward whichever class the source folder lists
+   first:
+   ```bash
+   python scripts/select_subset.py \
+       --input_dir /path/to/natural_images --output_dir data/clean --per_class 50
+   ```
 
 2. **Generate the synthetic labeled dataset:**
    ```bash
-   cd backend
    python scripts/generate_dataset.py \
        --input_dir data/clean --output_dir data/synthetic \
        --per_image 6 --img_size 224
@@ -213,7 +228,7 @@ Vite's dev server proxies `/api` and `/health` to `http://localhost:8000`
    ```
 
 4. **Train the CNN + autoencoder** (needs a GPU to be practical at
-   `--img_size 224`; on your RTX 5070, or Kaggle's T4):
+   `--img_size 224` — this project trained on a Kaggle notebook's free T4):
    ```bash
    python scripts/train_cnn.py \
        --manifest data/synthetic/manifest.csv \
@@ -227,6 +242,12 @@ Vite's dev server proxies `/api` and `/health` to `http://localhost:8000`
 
 5. Restart the backend (or `docker compose restart backend`) to pick up
    the new artifacts.
+
+6. **Regenerate sample images** for `samples/` from one real photo, showing
+   each condition in isolation at a fixed severity:
+   ```bash
+   python scripts/regen_samples.py --source data/clean/<a_real_photo>.jpg --output ../samples
+   ```
 
 ## Database
 
@@ -298,27 +319,112 @@ history detail view for the "original vs. defect view" toggle).
 
 ## Evaluation & results
 
-Methodology: held-out test split (by source-image identity, so no
-degraded variant of a test image appears in train/val), metrics computed
-per issue type — accuracy, precision, recall, F1, ROC-AUC, confusion
-matrix — plus MAE for the quality-score regression. Both training scripts
-write these to `data/models/{tree,cnn}/eval_report.json` automatically.
+Methodology: held-out test split (3,138 samples, by source-image identity
+so no degraded variant of a test image appears in train/val), metrics
+computed per issue type on 3,600 real source photos degraded 6 ways each
+(21,600 total samples).
 
-> **⚠️ The numbers currently checked into this repo are from a tiny
-> (40-image, procedurally-generated) proxy dataset used only to validate
-> the pipeline end-to-end while building it — not a real evaluation.**
-> Re-run `train_tree.py` and `train_cnn.py` against your real Kaggle-sourced
-> dataset, then replace this section with the resulting numbers before
-> submitting. Suggested content once you have real numbers:
-> - A summary table: per-issue precision/recall/F1/ROC-AUC for both the
->   tree and CNN models side by side (useful ablation — shows what the
->   CNN adds over the engineered features alone).
-> - The quality-score MAE for both models.
-> - 3–5 concrete failure cases from the test set (image + predicted vs.
->   true label) with a sentence on why each is a plausible confusion —
->   e.g. a heavily-textured clean image that reads as "noisy" to the
->   classical noise estimator, or an aggressively color-graded photo that
->   trips the exposure heuristics despite being intentional.
+### Tree model (classical features, fast baseline)
+
+| Issue | Accuracy | Precision | Recall | F1 | ROC-AUC |
+|---|---|---|---|---|---|
+| Blur | 0.955 | 0.939 | 0.860 | 0.897 | 0.985 |
+| Underexposure | 0.973 | 0.953 | 0.915 | 0.934 | 0.992 |
+| Overexposure | 0.968 | 0.948 | 0.898 | 0.922 | 0.994 |
+| Noise | 0.980 | 0.976 | 0.933 | 0.954 | 0.995 |
+| Corruption | 0.867 | 0.817 | 0.576 | 0.676 | 0.897 |
+| Defect | 0.895 | 0.827 | 0.681 | 0.747 | 0.925 |
+
+Score MAE: 12.13 (0–100 scale).
+
+### CNN (QualityNet)
+
+| Issue | Accuracy | Precision | Recall | F1 | ROC-AUC |
+|---|---|---|---|---|---|
+| Blur | 0.980 | 0.963 | 0.949 | 0.956 | 0.995 |
+| Underexposure | 0.977 | 0.977 | 0.909 | 0.942 | 0.989 |
+| Overexposure | 0.970 | 0.962 | 0.893 | 0.926 | 0.992 |
+| Noise | 0.988 | 0.995 | 0.948 | 0.971 | 0.997 |
+| Corruption | 0.971 | 0.984 | 0.895 | 0.937 | 0.991 |
+| Defect | 0.971 | 0.968 | 0.902 | 0.934 | 0.979 |
+
+Score MAE: 4.56.
+
+### Autoencoder (anomaly detector)
+
+Trained on clean images only; anomaly score is reconstruction error.
+Reference stats from held-out clean validation images: mean 0.0334, std
+0.0082, 95th percentile 0.0486. At inference, a new image's reconstruction
+error is z-scored against these to flag "defect" as an anomaly relative to
+what clean images normally look like, independent of the supervised
+defect classifier above — the two are combined at inference for the final
+defect call.
+
+### Reading these results
+
+- **CNN outperforms the tree model on every issue**, most sharply on
+  **corruption** (F1 0.68 → 0.94) and **defect** (F1 0.75 → 0.93). This is
+  expected: corruption and defects are spatial/structural patterns (block
+  dropout, scratches, localized occlusions) that a handful of global image
+  statistics can't capture well, while a CNN can learn spatial filters
+  for them directly. The tree model's weaker recall specifically (0.58 and
+  0.68) means it's missing real cases more than it's over-flagging — it's
+  the higher-value model to fall back on only when the CNN is unavailable.
+- Score MAE drops from 12.13 (tree) to 4.56 (CNN) on the same 0–100 scale,
+  consistent with the same pattern.
+- Validation and test metrics track closely across both models (no large
+  gap), which is the main evidence against overfitting to the synthetic
+  generation process itself, given both splits come from the same
+  generator.
+
+### Failure cases & limitations
+
+- **Out-of-distribution inputs are misjudged with high confidence.**
+  Testing with non-photographic inputs — a procedurally-generated
+  gradient/shapes graphic, and separately a system-architecture diagram
+  screenshot — both got flagged as "defective" by the autoencoder at
+  ~99% confidence, and the diagram was additionally flagged "overexposure"
+  at 100% confidence (81% of its pixels are genuinely near-white, since
+  it's a mostly-white diagram — the feature measurement is accurate, but
+  the semantic label "overexposure" assumes photographic content that
+  isn't present). Both models were trained exclusively on natural
+  photographs, so non-photographic input is far outside the training
+  distribution — the models don't know what they don't know, and
+  currently report high confidence rather than uncertainty on such inputs.
+  This is a known limitation of the current confidence outputs, not a bug:
+  a genuine out-of-distribution detector (e.g. thresholding the
+  autoencoder's reconstruction error against the clean-validation stats
+  above, independent of the labeled classifiers) would be the next step to
+  address this.
+- **Corruption and defect detection are the weakest categories for both
+  models**, though the CNN closes most of the gap. These issue types are
+  inherently harder to separate from natural image variation (e.g. a
+  genuinely dark, textured, or high-contrast photo can resemble a
+  synthetic corruption artifact) and are the categories most likely to
+  produce false negatives in practice.
+- **All training and evaluation data is synthetically degraded**, not
+  real-world defective photos with human-verified labels. The
+  degradation parameters are known and controlled, so metrics reflect how
+  well the models recover those known parameters — not necessarily how
+  well they'd generalize to naturally-occurring defects (e.g. real lens
+  scratches, real sensor noise from actual low-light conditions) that
+  weren't explicitly modeled by the degradation functions in
+  `app/ml/degrade.py`.
+- **Confidence is used as a proxy for severity** in the ensembling step
+  (how sure a classifier is an issue exists ≠ how bad that issue is).
+  This is documented explicitly in `inference.py`'s `_ensemble` method;
+  it's the best signal available at inference time for classifier-based
+  issues, but it's an approximation worth stating plainly rather than
+  glossing over.
+- **Corruption spans three mechanically different degradations** (block
+  dropout, JPEG re-encoding, channel shift) lumped under one label — a
+  candidate for splitting into separate issue types with more time.
+- **The autoencoder's anomaly threshold is calibrated only against clean
+  validation images** (mean + std of reconstruction error on held-out
+  clean images, converted to a z-score-based probability). It hasn't been
+  validated against a diverse "genuinely defective" test set, since the
+  synthetic `defect` degradations are themselves the only defect-labeled
+  data available.
 
 ## Explainability
 
@@ -329,39 +435,25 @@ Every `/analyze` response includes:
 - `heatmap_png_base64` — Grad-CAM (CNN) blended with the autoencoder's
   reconstruction-error map, toggleable in the frontend as "Defect view"
 
-## Limitations & failure cases
+## Deployment notes
 
-- **Confidence is used as a proxy for severity** in the ensembling step
-  (how sure a classifier is an issue exists ≠ how bad that issue is).
-  This is documented explicitly in `inference.py`'s `_ensemble` method;
-  it's the best signal available at inference time for classifier-based
-  issues, but it's an approximation worth stating plainly rather than
-  glossing over.
-- **Corruption is the hardest issue type** to detect reliably, because it
-  spans three mechanically very different degradations (block dropout,
-  JPEG re-encoding, channel shift) lumped under one label — worth
-  reporting as a specific limitation, and a candidate for splitting into
-  separate issue types if you have time.
-- **The autoencoder's anomaly threshold is calibrated only against clean
-  validation images** (mean + std of reconstruction error on held-out
-  clean images, converted to a z-score-based probability). It hasn't been
-  validated against a diverse "genuinely defective" test set, since the
-  synthetic `defect` degradations are themselves the only defect-labeled
-  data available.
-- **Small/procedural training data checked into this repo currently** —
-  see the callout in [Evaluation & results](#evaluation--results).
+Deployed as two separate services (rather than the same-origin Docker
+Compose setup, which is also fully supported and was verified locally
+first):
 
-## Before you submit
-
-- [ ] Retrain `tree` and `cnn` models on a real image dataset (see
-      [Training your own models](#training-your-own-models))
-- [ ] Replace the [Evaluation & results](#evaluation--results) section
-      with real metrics + failure-case discussion
-- [ ] Replace `samples/` with real photos per condition (see
-      `samples/README.md`)
-- [ ] Run `docker compose up --build` yourself end-to-end as a final
-      sanity check — this was built and tested without a live Docker
-      daemon available, so the compose/Dockerfile setup, while written
-      carefully against standard patterns, hasn't been build-tested here
-- [ ] If deploying online, add the URL to this README (optional per the
-      brief — local Docker Compose is acceptable)
+- **Backend**: [Render](https://render.com), free tier, deployed directly
+  from `backend/Dockerfile` (the same image used and verified in the local
+  Docker Compose setup). Free-tier constraints: 512MB RAM (comfortably fits
+  this app's CPU-only torch + opencv + model footprint, verified in
+  production), and the service sleeps after 15 minutes idle (30-60s
+  cold-start on the next request). Environment variables are set in
+  Render's dashboard, mirroring `docker-compose.yml`.
+- **Frontend**: [Vercel](https://vercel.com), built from `frontend/`
+  with `VITE_API_BASE` set at build time to the Render backend URL, since
+  the two services are on different origins (no shared nginx reverse proxy
+  like the Docker setup). The backend's `CORS_ORIGINS` is set to the
+  Vercel domain to allow this.
+- **Model loading**: both deployments load `data/models/{tree,cnn}/` once
+  at FastAPI startup (`app/main.py`'s lifespan handler) — the same code
+  path locally, in Docker, and in the cloud. `/health` reports whether
+  each of the three models (tree, CNN, autoencoder) loaded successfully.
