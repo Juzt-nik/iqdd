@@ -30,18 +30,7 @@ pipeline, with no external AI/vision APIs.
 
 ## Architecture
 
-```
-┌──────────────┐      ┌──────────────────────┐      ┌────────────────────┐
-│   Frontend    │ HTTP │       Backend         │      │   Inference core    │
-│  React+Vite   │─────▶│  FastAPI + SQLAlchemy │─────▶│  app/ml/*            │
-│  (nginx prod) │◀─────│  SQLite / Postgres    │◀─────│  tree + CNN + AE     │
-└──────────────┘      └──────────────────────┘      └────────────────────┘
-                                                              │
-                                                     ┌────────┴────────┐
-                                                     │  Trained models  │
-                                                     │  data/models/    │
-                                                     └──────────────────┘
-```
+![System Architecture](public/architecture.png)
 
 - **Frontend**: React (Vite), talks to the backend via `/api/v1/*`. In
   Docker (or same-origin deployments), nginx reverse-proxies these calls so
@@ -253,32 +242,12 @@ Vite's dev server proxies `/api` and `/health` to `http://localhost:8000`
 
 Defaults to a local SQLite file (`storage/iqdd.db` in Docker,
 `./storage/iqdd.db` locally) — created automatically on first startup, no
-setup needed. This is what `docker compose up` and local dev use.
+setup needed.
 
-**The live deployment uses Postgres (Supabase)** instead — no code changes
-were needed to switch, only `DATABASE_URL` and one added dependency, since
-the app goes through SQLAlchemy's engine abstraction throughout:
-
-1. Add `psycopg2-binary` to `requirements.txt`.
-2. Set `DATABASE_URL` to a Postgres DSN, e.g.
-   `postgresql://user:pass@host:5432/dbname`.
-3. Table creation is automatic — `init_db()` runs in `main.py`'s startup
-   lifespan and calls `Base.metadata.create_all()`, which creates the
-   `analyses` table from the existing SQLAlchemy model on whichever
-   database `DATABASE_URL` points to. No manual schema/migration step.
-
-Two things worth knowing if reproducing this:
-- **Use Supabase's connection *pooler* string, not the direct connection.**
-  Supabase's direct connection host is IPv6-only unless you pay for their
-  IPv4 add-on, and several hosts (including Render) don't support outbound
-  IPv6 — this surfaces as `Network is unreachable`, not an auth error, so
-  it's easy to misdiagnose as a credentials problem. The pooler host
-  (`aws-0-<region>.pooler.supabase.com`) is IPv4-compatible.
-- **URL-encode special characters in the password.** A literal `@` in the
-  password breaks the DSN, since `@` is also the delimiter between
-  credentials and host in a connection URI — a password containing one
-  needs to be percent-encoded (`@` → `%40`) or the parser silently
-  misreads where the host starts.
+To use Postgres instead, set `DATABASE_URL` (e.g.
+`postgresql://user:pass@host:5432/iqdd`) and add `psycopg2-binary` to
+`requirements.txt`; no other code changes are needed since the app goes
+through SQLAlchemy's engine abstraction.
 
 ## API reference
 
@@ -473,11 +442,6 @@ first):
   the two services are on different origins (no shared nginx reverse proxy
   like the Docker setup). The backend's `CORS_ORIGINS` is set to the
   Vercel domain to allow this.
-- **Database**: [Supabase](https://supabase.com) (managed Postgres),
-  connected via `DATABASE_URL` with no application code changes — see
-  [Database](#database) for the two real gotchas hit during setup (pooler
-  vs. direct connection, password URL-encoding). Chosen over Render's own
-  free Postgres because Supabase's free tier doesn't expire after 30 days.
 - **Model loading**: both deployments load `data/models/{tree,cnn}/` once
   at FastAPI startup (`app/main.py`'s lifespan handler) — the same code
   path locally, in Docker, and in the cloud. `/health` reports whether
