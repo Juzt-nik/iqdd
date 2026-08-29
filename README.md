@@ -101,7 +101,7 @@ heatmap. Every flagged issue also carries a plain-language explanation
 grounded in its actual feature value (e.g. *"estimated noise level is
 elevated (sigma ≈ 14.1)"*), not just a bare confidence number.
 
-**Type of Image**: While testing the application, it was seen that "Generative Images" are put under the detective quality due to being whitewashed and containing high-contrast pixels. 
+**Type of Image**: While testing the application, it was seen that "Generative Images" are put under detective quality due to being whitewashed and containing high-contrast pixels. 
 
 ## Project structure
 
